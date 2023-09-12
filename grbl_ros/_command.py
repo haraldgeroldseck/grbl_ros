@@ -29,12 +29,13 @@ from geometry_msgs.msg import TransformStamped
 from grbl_msgs.msg import State
 
 import serial
+import time
 
 
 class command(object):
     """Command class to hold all command functions for the grbl device class."""
 
-    def startup(self, machine_id, port, baud, acc, maxx, maxy, maxz,
+    def startup(self, machine_id , port, baud, acc, maxx, maxy, maxz,
                 spdf, spdx, spdy, spdz, stepsx, stepsy, stepsz):
         """
         Startup the GRBL machine with the specified parameters.
@@ -99,6 +100,26 @@ class command(object):
         # close the serial connection
         self.s.close()
 
+    def restart(self):
+        self.shutdown()
+        time.sleep(5)
+        self.startup(
+            machine_id=self.machine_id,
+            baud=self.baudrate,
+            port=self.port,
+            acc=self.acceleration,
+            maxx=self.x_max,
+            maxy=self.y_max,
+            maxz=self.z_max,
+            spdf=self.defaultSpeed,
+            spdx=self.x_max_speed,
+            spdy=self.y_max_speed,
+            spdz=self.z_max_speed,
+            stepsx=self.x_steps_mm,
+            stepsy=self.y_steps_mm,
+            stepsz=self.z_steps_mm
+            )
+
     def send(self, gcode):
         """
         Send some specified GCODE to the GRBL machine.
@@ -113,6 +134,9 @@ class command(object):
 
         """
         # TODO(evanflynn): need to add some input checking to make sure its valid GCODE
+        special_code = False
+        if gcode.find('$'):
+            special_code = True
         if(len(gcode) > 0):
             responses = []
             if(self.mode == self.MODE.NORMAL):
@@ -124,6 +148,7 @@ class command(object):
                 # check to see if there are more lines in waiting
                 while (self.s.inWaiting() > 0):
                     responses.append(self.s.readline().decode('utf-8').strip())
+                # self.node.get_logger().warn(f"checking {len(responses)} lines")
                 self.handle_responses(responses, gcode)
                 # last response should always be the state of grbl
                 return responses[-1]
@@ -136,6 +161,8 @@ class command(object):
     def handle_responses(self, responses, cmd):
         # iterate over each response line
         for line in responses:
+            if len(line) <= 0: 
+                continue
             if(line.find('ok') == -1):
                 self.node.get_logger().info('[ ' + str(cmd) + ' ] ' + str(line))
             # check if line is grbl status report

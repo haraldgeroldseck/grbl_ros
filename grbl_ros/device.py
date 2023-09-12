@@ -50,7 +50,6 @@ class grbl_node(Node):
     def __init__(self):
         # TODO(evanflynn): init node with machine_id param input or arg
         super().__init__('grbl_device')
-
         self.get_logger().info('Declaring ROS parameters')
         self.declare_parameters(
             namespace='',
@@ -172,13 +171,30 @@ class grbl_node(Node):
 
         """
         result = SendGcodeCmd.Result()
+
+        if str(goal_handle.request.command) == '$RESET':
+            self.machine.restart()
+            result.success = True
+            return result
+
+        # self.get_logger().warn(f"sending command: {str(goal_handle.request.command)}")
+        if str(goal_handle.request.command) == "$H":
+            # wait for some time, because this command seems to give a buggy response
+            time.sleep(1)
         status = self.machine.send(str(goal_handle.request.command))
-        if(status.find('error') > -1):
+        if str(goal_handle.request.command) == "$H":
+            # wait for some time, because this command seems to give a buggy response
+            time.sleep(1)
+        # self.get_logger().warn(f"plain status: {status}")
+        if(status.find('error') >= 0):
             # grbl device returned error code
             # decode error
-            self.decode_error(status)
+            # self.decode_error(status)
             result.success = False
-        elif(status.find('ok') > -1):
+        if (status.find('ALARM') >= 0):
+            result.success = False
+        elif(status.find('ok') >= 0):
+            # if no g code just give success
             # grbl device running command
             # check state
             self.machine.send(str('?'))
