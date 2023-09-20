@@ -148,7 +148,7 @@ class command(object):
                 # check to see if there are more lines in waiting
                 while (self.s.inWaiting() > 0):
                     responses.append(self.s.readline().decode('utf-8').strip())
-                # self.node.get_logger().warn(f"checking {len(responses)} lines")
+                #self.node.get_logger().warn(f"checking {len(responses)} lines")
                 self.handle_responses(responses, gcode)
                 # last response should always be the state of grbl
                 return responses[-1]
@@ -161,12 +161,13 @@ class command(object):
     def handle_responses(self, responses, cmd):
         # iterate over each response line
         for line in responses:
+            # self.node.get_logger().warn(f"checking: {line}")
             if len(line) <= 0: 
                 continue
             if(line.find('ok') == -1):
                 self.node.get_logger().info('[ ' + str(cmd) + ' ] ' + str(line))
             # check if line is grbl status report
-            if(line[0] == '<'):
+            if(line[0] == '<' and line[-1] == '>'):
                 self.parse_status(line)
 
     def parse_status(self, status):

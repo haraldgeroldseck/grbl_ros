@@ -177,15 +177,9 @@ class grbl_node(Node):
             result.success = True
             return result
 
-        # self.get_logger().warn(f"sending command: {str(goal_handle.request.command)}")
-        if str(goal_handle.request.command) == "$H":
-            # wait for some time, because this command seems to give a buggy response
-            time.sleep(1)
+        self.get_logger().debug(f"sending command: {str(goal_handle.request.command)}")
         status = self.machine.send(str(goal_handle.request.command))
-        if str(goal_handle.request.command) == "$H":
-            # wait for some time, because this command seems to give a buggy response
-            time.sleep(1)
-        # self.get_logger().warn(f"plain status: {status}")
+        self.get_logger().debug(f"plain status: {status}")
         if(status.find('error') >= 0):
             # grbl device returned error code
             # decode error
