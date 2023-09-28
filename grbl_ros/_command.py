@@ -168,7 +168,10 @@ class command(object):
                 self.node.get_logger().info('[ ' + str(cmd) + ' ] ' + str(line))
             # check if line is grbl status report
             if(line[0] == '<' and line[-1] == '>'):
-                self.parse_status(line)
+                try:
+                    self.parse_status(line)
+                except:
+                    self.node.get_logger().warn(f"failed to handle line {line}. Skipping it")
 
     def parse_status(self, status):
         try:
