@@ -151,7 +151,10 @@ class command(object):
                 #self.node.get_logger().warn(f"checking {len(responses)} lines")
                 self.handle_responses(responses, gcode)
                 # last response should always be the state of grbl
-                return responses[-1]
+                if len(responses) > 0:
+                    return responses[-1]
+                else:
+                    return 
             elif(self.mode == self.MODE.DEBUG):
                 # in debug mode just return the GCODE that was input
                 return 'Sent: ' + gcode
