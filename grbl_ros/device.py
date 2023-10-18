@@ -28,13 +28,16 @@ from grbl_msgs.srv import Stop
 from grbl_ros import grbl
 
 import rclpy
-from rclpy.action import ActionClient, ActionServer
+from rclpy.action.server import ServerGoalHandle
+from rclpy.action import ActionClient, ActionServer, GoalResponse
 
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
 from tf2_ros.transform_broadcaster import TransformBroadcaster
+
+from datetime import datetime, timedelta
 
 
 class grbl_node(Node):
@@ -84,10 +87,11 @@ class grbl_node(Node):
         self.action_done_event = Event()
         self.callback_group = ReentrantCallbackGroup()
         self.action_send_gcode_ = ActionServer(
-                self,
-                SendGcodeCmd,
-                self.machine_id + '/send_gcode_cmd',
-                self.gcodeCallback)
+                node=self,
+                action_type=SendGcodeCmd,
+                action_name=self.machine_id + '/send_gcode_cmd',
+                execute_callback=self.gcodeCallback,
+                goal_callback=self.gcode_goal_callback)
         self.action_send_gcode_file_ = ActionServer(
                 self,
                 SendGcodeFile,
@@ -156,14 +160,31 @@ class grbl_node(Node):
             self.get_logger().info('GRBL device operation may not function as expected')
             self.machine.mode = self.machine.MODE.DEBUG
 
+    def wait(self, seconds: float):
+        end = datetime.utcnow() + timedelta(seconds=seconds)
+        while datetime.utcnow() < end:
+            rclpy.spin_once(self, timeout_sec=0.25)
+
     def poseCallback(self, request, response):
         self.machine.moveTo(request.position.x,
                             request.position.y,
                             request.position.z,
                             blockUntilComplete=True)
         return response
+    
+    gcode_action_occupied = False
+    def gcode_goal_callback(self, goal_request):
+        self.get_logger().info("Received goal request")
+        if self.gcode_action_occupied:
+            self.get_logger().info("Action is occupied. Waiting...")
+        while self.gcode_action_occupied:
+            self.wait(0.5)
+        self.get_logger().info("")
+        self.gcode_action_occupied = True
+        return GoalResponse.ACCEPT
 
-    def gcodeCallback(self, goal_handle):
+
+    def gcodeCallback(self, goal_handle: ServerGoalHandle):
         """
         Send GCODE ROS2 action callback.
 
@@ -184,9 +205,13 @@ class grbl_node(Node):
             # grbl device returned error code
             # decode error
             # self.decode_error(status)
+            self.get_logger().warn(f"send gcode action got into error status {status}. Aborting action")
             result.success = False
-        if (status.find('ALARM') >= 0):
+            goal_handle.abort()
+        elif (status.find('ALARM') >= 0):
+            self.get_logger().warn(f"send gcode action got into alarm status {status}. Aborting action")
             result.success = False
+            goal_handle.abort()
         elif(status.find('ok') >= 0):
             # if no g code just give success
             # grbl device running command
@@ -205,12 +230,14 @@ class grbl_node(Node):
             # elif(self.machine.state.name.upper() == self.machine.STATE.ALARM.name):
                 # machine alarm is still active
                 # self.get_logger().warn('ALARM')
-            goal_handle.succeed()
             result.success = True
+            goal_handle.succeed()
         else:
             # grbl device returned unknown
-            self.get_logger().warn(status)
+            self.get_logger().warn(f"send gcode action got into uncovered status {status}. Aborting action")
             result.success = False
+            goal_handle.abort()
+        self.gcode_action_occupied = False
         return result
 
     def streamCallback(self, goal_handle):
